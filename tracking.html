@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Link Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 0.5rem;
+            background-color: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+        }
+        .link-cell {
+            max-width: 300px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-indigo-600 mb-2">Link Tracker</h1>
+            <p class="text-gray-600">Create trackable links and monitor when and where they're opened</p>
+        </header>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Link Creation Panel -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Create Tracking Link</h2>
+                
+                <div class="mb-4">
+                    <label for="destination-url" class="block text-sm font-medium text-gray-700 mb-1">Destination URL</label>
+                    <input 
+                        type="url" 
+                        id="destination-url" 
+                        placeholder="https://example.com" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        required
+                    >
+                </div>
+                
+                <div class="mb-4">
+                    <label for="link-name" class="block text-sm font-medium text-gray-700 mb-1">Link Name (Optional)</label>
+                    <input 
+                        type="text" 
+                        id="link-name" 
+                        placeholder="Promo Campaign" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                </div>
+                
+                <button 
+                    id="generate-btn" 
+                    class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition duration-150 ease-in-out"
+                >
+                    Generate Tracking Link
+                </button>
+                
+                <div id="generated-link-container" class="mt-4 hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Your Tracking Link</label>
+                    <div class="flex items-center">
+                        <input 
+                            type="text" 
+                            id="generated-link" 
+                            readonly 
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none bg-gray-100"
+                        >
+                        <button 
+                            id="copy-btn" 
+                            class="px-4 py-2 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700 transition duration-150 ease-in-out"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Link Analytics and Map -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Stats -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Tracking Analytics</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div class="bg-indigo-50 p-4 rounded-lg">
+                            <p class="text-sm font-medium text-indigo-600">Total Links</p>
+                            <p id="total-links" class="text-2xl font-bold text-indigo-700">0</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <p class="text-sm font-medium text-green-600">Total Opens</p>
+                            <p id="total-opens" class="text-2xl font-bold text-green-700">0</p>
+                        </div>
+                        <div class="bg-purple-50 p-4 rounded-lg">
+                            <p class="text-sm font-medium text-purple-600">Unique Locations</p>
+                            <p id="unique-locations" class="text-2xl font-bold text-purple-700">0</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Map Placeholder -->
+                    <div id="map">
+                        <div class="text-center">
+                            <p class="text-lg">🗺️ Interactive Map</p>
+                            <p class="text-sm mt-2">Location data will appear here when links are opened</p>
+                            <p class="text-xs mt-1 text-gray-500">
+                                To enable Google Maps, add your API key to the script tag
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recent Activity -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Recent Activity</h2>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Link Name</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Destination</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Opened At</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activity-body" class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                                        No activity yet. Links will appear here when they're opened.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Database object to store links and tracking data
+        const db = {
+            links: {},
+            opens: []
+        };
+        
+        // Load data from localStorage
+        function loadData() {
+            const savedLinks = localStorage.getItem('linkTracker_links');
+            const savedOpens = localStorage.getItem('linkTracker_opens');
+            
+            if (savedLinks) {
+                try {
+                    db.links = JSON.parse(savedLinks);
+                } catch (e) {
+                    console.error('Failed to load links:', e);
+                }
+            }
+            
+            if (savedOpens) {
+                try {
+                    db.opens = JSON.parse(savedOpens);
+                } catch (e) {
+                    console.error('Failed to load opens:', e);
+                }
+            }
+        }
+        
+        // Save data to localStorage
+        function saveData() {
+            try {
+                localStorage.setItem('linkTracker_links', JSON.stringify(db.links));
+                localStorage.setItem('linkTracker_opens', JSON.stringify(db.opens));
+            } catch (e) {
+                console.error('Failed to save data:', e);
+            }
+        }
+        
+        // Get DOM elements
+        const destinationInput = document.getElementById('destination-url');
+        const linkNameInput = document.getElementById('link-name');
+        const generateBtn = document.getElementById('generate-btn');
+        const generatedLinkContainer = document.getElementById('generated-link-container');
+        const generatedLinkInput = document.getElementById('generated-link');
+        const copyBtn = document.getElementById('copy-btn');
+        const totalLinksEl = document.getElementById('total-links');
+        const totalOpensEl = document.getElementById('total-opens');
+        const uniqueLocationsEl = document.getElementById('unique-locations');
+        const activityBody = document.getElementById('activity-body');
+        
+        // Initialize the application
+        function init() {
+            // Load existing data
+            loadData();
+            
+            // Set up event listeners
+            generateBtn.addEventListener('click', generateLink);
+            copyBtn.addEventListener('click', copyLink);
+            
+            // Check for tracking parameters
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('tracking_id')) {
+                trackLink(params.get('tracking_id'));
+            }
+            
+            // Update the UI
+            updateStats();
+        }
+        
+        // Generate a new tracking link
+        function generateLink() {
+            const destinationUrl = destinationInput.value.trim();
+            const linkName = linkNameInput.value.trim() || 'Untitled Link';
+            
+            // Validate URL
+            if (!destinationUrl) {
+                alert('Please enter a destination URL');
+                return;
+            }
+            
+            // Basic URL validation
+            try {
+                new URL(destinationUrl);
+            } catch (e) {
+                alert('Please enter a valid URL (including http:// or https://)');
+                return;
+            }
+            
+            // Generate unique tracking ID
+            const trackingId = 'track_' + Math.random().toString(36).substr(2, 9);
+            
+            // Create tracking URL
+            const currentUrl = window.location.origin + window.location.pathname;
+            const trackingUrl = currentUrl + '?tracking_id=' + trackingId + '&redirect=' + encodeURIComponent(destinationUrl);
+            
+            // Store link data
+            db.links[trackingId] = {
+                name: linkName,
+                destination: destinationUrl,
+                createdAt: new Date().toISOString(),
+                opens: 0
+            };
+            
+            // Save to localStorage
+            saveData();
+            
+            // Display the generated link
+            generatedLinkInput.value = trackingUrl;
+            generatedLinkContainer.classList.remove('hidden');
+            
+            // Clear form
+            destinationInput.value = '';
+            linkNameInput.value = '';
+            
+            // Update stats
+            updateStats();
+            
+            // Scroll to show the link
+            generatedLinkContainer.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Copy link to clipboard
+        function copyLink() {
+            generatedLinkInput.select();
+            generatedLinkInput.setSelectionRange(0, 99999); // For mobile devices
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showCopyFeedback();
+                } else {
+                    // Fallback for modern browsers
+                    navigator.clipboard.writeText(generatedLinkInput.value).then(() => {
+                        showCopyFeedback();
+                    }).catch(() => {
+                        alert('Failed to copy link. Please copy manually.');
+                    });
+                }
+            } catch (err) {
+                // Fallback for modern browsers
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(generatedLinkInput.value).then(() => {
+                        showCopyFeedback();
+                    }).catch(() => {
+                        alert('Failed to copy link. Please copy manually.');
+                    });
+                } else {
+                    alert('Failed to copy link. Please copy manually.');
+                }
+            }
+        }
+        
+        // Show copy feedback
+        function showCopyFeedback() {
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = 'Copied!';
+            copyBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+            copyBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+            
+            setTimeout(() => {
+                copyBtn.textContent = originalText;
+                copyBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                copyBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            }, 2000);
+        }
+        
+        // Track link click
+        function trackLink(trackingId) {
+            // Check if link exists
+            if (!db.links[trackingId]) {
+                console.error('Invalid tracking ID:', trackingId);
+                window.location.href = window.location.origin + window.location.pathname;
+                return;
+            }
+            
+            // Get redirect URL
+            const params = new URLSearchParams(window.location.search);
+            const redirectUrl = params.get('redirect');
+            
+            if (!redirectUrl) {
+                console.error('No redirect URL provided');
+                return;
+            }
+            
+            // Update link stats
+            db.links[trackingId].opens += 1;
+            
+            // Try to get user location
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        // Log with location
+                        const locationData = {
+                            trackingId: trackingId,
+                            timestamp: new Date().toISOString(),
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude,
+                            accuracy: position.coords.accuracy
+                        };
+                        
+                        db.opens.push(locationData);
+                        saveData();
+                        
+                        // Redirect
+                        window.location.href = redirectUrl;
+                    },
+                    (error) => {
+                        // Log without location
+                        const openData = {
+                            trackingId: trackingId,
+                            timestamp: new Date().toISOString(),
+                            error: error.message
+                        };
+                        
+                        db.opens.push(openData);
+                        saveData();
+                        
+                        // Redirect
+                        window.location.href = redirectUrl;
+                    },
+                    { 
+                        enableHighAccuracy: true, 
+                        timeout: 5000, 
+                        maximumAge: 60000 
+                    }
+                );
+            } else {
+                // Geolocation not supported
+                const openData = {
+                    trackingId: trackingId,
+                    timestamp: new Date().toISOString(),
+                    error: 'Geolocation not supported'
+                };
+                
+                db.opens.push(openData);
+                saveData();
+                
+                // Redirect
+                window.location.href = redirectUrl;
+            }
+        }
+        
+        // Update statistics and UI
+        function updateStats() {
+            // Update basic stats
+            totalLinksEl.textContent = Object.keys(db.links).length;
+            totalOpensEl.textContent = db.opens.length;
+            
+            // Count unique locations
+            const uniqueLocations = new Set();
+            db.opens.forEach(open => {
+                if (open.lat && open.lng) {
+                    const locationKey = open.lat.toFixed(2) + ',' + open.lng.toFixed(2);
+                    uniqueLocations.add(locationKey);
+                }
+            });
+            uniqueLocationsEl.textContent = uniqueLocations.size;
+            
+            // Update activity table
+            updateActivityTable();
+        }
+        
+        // Update the activity table
+        function updateActivityTable() {
+            // Clear existing content
+            activityBody.innerHTML = '';
+            
+            if (db.opens.length === 0) {
+                activityBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                            No activity yet. Links will appear here when they're opened.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            // Sort opens by timestamp (newest first)
+            const sortedOpens = [...db.opens].sort((a, b) => 
+                new Date(b.timestamp) - new Date(a.timestamp)
+            );
+            
+            // Create table rows
+            sortedOpens.forEach(open => {
+                const link = db.links[open.trackingId];
+                if (!link) return;
+                
+                const row = document.createElement('tr');
+                
+                // Link name
+                const nameCell = document.createElement('td');
+                nameCell.className = 'px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900';
+                nameCell.textContent = link.name;
+                row.appendChild(nameCell);
+                
+                // Destination
+                const destCell = document.createElement('td');
+                destCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500 link-cell';
+                destCell.textContent = link.destination;
+                destCell.title = link.destination; // Show full URL on hover
+                row.appendChild(destCell);
+                
+                // Location
+                const locCell = document.createElement('td');
+                locCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                if (open.lat && open.lng) {
+                    locCell.textContent = open.lat.toFixed(4) + ', ' + open.lng.toFixed(4);
+                } else {
+                    locCell.textContent = 'Unknown';
+                }
+                row.appendChild(locCell);
+                
+                // Timestamp
+                const timeCell = document.createElement('td');
+                timeCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                const date = new Date(open.timestamp);
+                timeCell.textContent = date.toLocaleString();
+                row.appendChild(timeCell);
+                
+                activityBody.appendChild(row);
+            });
+        }
+        
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
